@@ -46,9 +46,9 @@ class DeeplTranslator(BaseTranslator):
         self.version = "v2"
         self.api_key = api_key
         url = (
-            BASE_URLS.get("DEEPL_FREE").format(version=self.version)
+            BASE_URLS.get("DEEPL_FREE", "").format(version=self.version)
             if use_free_api
-            else BASE_URLS.get("DEEPL").format(version=self.version)
+            else BASE_URLS.get("DEEPL", "").format(version=self.version)
         )
         super().__init__(
             base_url=url,
@@ -58,7 +58,7 @@ class DeeplTranslator(BaseTranslator):
             **kwargs
         )
 
-    def translate(self, text: str, **kwargs) -> str:
+    def translate(self, text: str, **kwargs) -> Optional[str]:
         """
         @param text: text to translate
         @return: translated text
@@ -69,16 +69,19 @@ class DeeplTranslator(BaseTranslator):
 
             # Create the request parameters.
             translate_endpoint = "translate"
-            params = {
-                "auth_key": self.api_key,
-                "source_lang": self._source,
+            headers = {
+                "Authorization": f"DeepL-Auth-Key {self.api_key}",
+            }
+            data = {
                 "target_lang": self._target,
                 "text": text,
             }
+            if self._source != "auto": # DeepL auto detects source language if not specified.
+                data["source_lang"] = self._source
             # Do the request and check the connection.
             try:
-                response = requests.get(
-                    self._base_url + translate_endpoint, params=params
+                response = requests.post(
+                    (self._base_url or "") + translate_endpoint, headers=headers, data=data
                 )
             except ConnectionError:
                 raise ServerException(503)

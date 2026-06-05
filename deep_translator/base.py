@@ -20,7 +20,7 @@ class BaseTranslator(ABC):
 
     def __init__(
         self,
-        base_url: str = None,
+        base_url: Optional[str] = None,
         languages: dict = GOOGLE_LANGUAGES_TO_CODES,
         source: str = "auto",
         target: str = "en",
@@ -140,16 +140,15 @@ class BaseTranslator(ABC):
         page = reader.pages[0]
         return page.extract_text()
 
-    def _translate_file(self, path: str, **kwargs) -> str:
+    def _translate_file(self, path: str|Path, **kwargs) -> str:
         """
         translate directly from file
         @param path: path to the target file
-        @type path: str
+        @type path: str or Path
         @param kwargs: additional args
         @return: str
         """
-        if not isinstance(path, Path):
-            path = Path(path)
+        path = Path(path)
 
         if not path.exists():
             print("Path to the file is wrong!")
