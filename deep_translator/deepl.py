@@ -31,7 +31,6 @@ class DeeplTranslator(BaseTranslator):
         source: str = "de",
         target: str = "en",
         api_key: Optional[str] = os.getenv(DEEPL_ENV_VAR, None),
-        use_free_api: bool = True,
         **kwargs
     ):
         """
@@ -47,7 +46,7 @@ class DeeplTranslator(BaseTranslator):
         self.api_key = api_key
         url = (
             BASE_URLS.get("DEEPL_FREE", "").format(version=self.version)
-            if use_free_api
+            if self.is_free_api(self.api_key)
             else BASE_URLS.get("DEEPL", "").format(version=self.version)
         )
         super().__init__(
@@ -57,6 +56,9 @@ class DeeplTranslator(BaseTranslator):
             languages=DEEPL_LANGUAGE_TO_CODE,
             **kwargs
         )
+        
+    def is_free_api(self, api_key):
+        return api_key.endswith(":fx")
 
     def translate(self, text: str, **kwargs) -> Optional[str]:
         """
