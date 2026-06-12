@@ -1,11 +1,16 @@
-__copyright__ = "Copyright (C) 2020 Nidhal Baccouri"
+__copyright__ = [
+    "Copyright (C) 2020 Nidhal Baccouri",
+    "Copyright (C) 2026 Alan Lee",
+]
 
+import json
 import os
-from typing import List, Optional
-
 import requests
+import logging
+from typing import List, Optional
+from pathlib import Path
 
-from deep_translator.base import BaseTranslator
+from deep_translator.base import BaseTranslator, Language
 from deep_translator.constants import (
     BASE_URLS,
     DEEPL_ENV_VAR,
@@ -19,13 +24,14 @@ from deep_translator.exceptions import (
 )
 from deep_translator.validate import is_empty, is_input_valid, request_failed
 
+logger = logging.getLogger(__name__)
 
 class DeeplTranslator(BaseTranslator):
     """
     class that wraps functions, which use the DeeplTranslator translator
     under the hood to translate word(s)
     """
-
+    save_cache = True  # whether to save the fetched supported languages in a local cache file to avoid making repeated requests to DeepL for the same data, improving performance and reducing network load.
     def __init__(
         self,
         source: str = "de",
@@ -42,7 +48,7 @@ class DeeplTranslator(BaseTranslator):
         if not api_key:
             raise ApiKeyException(env_var=DEEPL_ENV_VAR)
 
-        self.version = "v2"
+        self.version = "v3"
         self.api_key = api_key
         url = (
             BASE_URLS.get("DEEPL_FREE", "").format(version=self.version)
@@ -53,10 +59,46 @@ class DeeplTranslator(BaseTranslator):
             base_url=url,
             source=source,
             target=target,
-            languages=DEEPL_LANGUAGE_TO_CODE,
+            # languages=DEEPL_LANGUAGE_TO_CODE,
             **kwargs
         )
-        
+    
+    def _fetch_supported_languages(self) -> dict[str, Language]:
+        """ Fetch supported languages directly from the DeepL API.
+        @return: dict mapping language names to their codes
+        """
+        def object_hook(obj):
+            """Custom object hook for JSON deserialization to convert language dicts into Language objects."""
+            if "lang" in obj and "name" in obj:
+                return obj["lang"], Language(code=obj["lang"], name=obj["name"], is_source=obj.get('usable_as_source', True), is_target=obj.get('usable_as_target', True))
+            return obj
+        if self._languages_cache:
+            return self._languages_cache
+        cache_file = cache_file = Path.home() / ".cache" / "deep_translator" / f"deepl.json"
+        headers = {"Authorization": f"DeepL-Auth-Key {self.api_key}"}
+        params = {"resource": "translate_text"}
+        response = requests.get(
+            f"{self._base_url}/languages", headers=headers, params=params
+        )
+        if request_failed(response.status_code):
+            if cache_file.exists():
+                with open(cache_file, "r") as f:
+                    languages = dict(json.load(f, object_hook=object_hook))
+            else:
+                logger.warning("Failed to fetch supported languages from API nor caching from local. Falling back to default language list.")
+                languages = super()._fetch_supported_languages() 
+        elif self.save_cache:
+            logger.debug(f"Caching supported languages to {cache_file}")
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(response.json(), f, ensure_ascii=False, indent=4)
+                languages = dict(json.loads(response.text, object_hook=object_hook))
+        else:
+            logger.warning("Failed to fetch supported languages from API nor caching from local. Falling back to default language list.")
+            languages = {name: Language(code, name) for name, code in DEEPL_LANGUAGE_TO_CODE.items()}
+        self.__class__._languages_cache = languages
+        return languages
+
     def is_free_api(self, api_key):
         return api_key.endswith(":fx")
 

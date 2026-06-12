@@ -65,7 +65,7 @@ class QcriTranslator(BaseTranslator):
             params = self.params
         try:
             res = requests.get(
-                self._base_url.format(endpoint=self.api_endpoints[endpoint]),
+                self.base_url.format(endpoint=self.api_endpoints[endpoint]),
                 params=params,
             )
             return res.text if return_text else res
@@ -84,7 +84,7 @@ class QcriTranslator(BaseTranslator):
     def domains(self):
         return self.get_domains()
 
-    def translate(self, text: str, **kwargs) -> str:
+    def translate(self, text: str, **kwargs) -> Optional[str]:
         params = {
             "key": self.api_key,
             "langpair": f"{self._source}-{self._target}",

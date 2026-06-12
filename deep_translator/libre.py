@@ -64,7 +64,7 @@ class LibreTranslator(BaseTranslator):
             languages=LIBRE_LANGUAGES_TO_CODES,
         )
 
-    def translate(self, text: str, **kwargs) -> str:
+    def translate(self, text: str, **kwargs) -> Optional[str]:
         """
         function that uses microsoft translate to translate a text
         @param text: desired text to translate
@@ -87,7 +87,7 @@ class LibreTranslator(BaseTranslator):
             # Do the request and check the connection.
             try:
                 response = requests.post(
-                    self._base_url + translate_endpoint, params=params
+                    self.base_url + translate_endpoint, params=params
                 )
             except ConnectionError:
                 raise ServerException(503)

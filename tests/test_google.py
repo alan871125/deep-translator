@@ -5,6 +5,7 @@
 import pytest
 
 from deep_translator import GoogleTranslator, exceptions
+from deep_translator.base import Language
 from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
 
 
@@ -15,7 +16,10 @@ def google_translator():
     """
     return GoogleTranslator(target="en")
 
-
+def test_fetching_supported_languages():
+    for k,v in GoogleTranslator()._languages.items():
+        assert type(k) == str,type(v) == Language
+        
 def test_content(google_translator):
     """Sample pytest test function with the pytest fixture as an argument."""
     assert google_translator.translate(text="좋은") == "good"

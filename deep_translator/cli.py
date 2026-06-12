@@ -5,12 +5,13 @@ __copyright__ = "Copyright (C) 2020 Nidhal Baccouri"
 import argparse
 from typing import Optional
 
+from deep_translator.base import BaseTranslator
 from deep_translator.engines import __engines__
 
 
 class CLI(object):
     translators_dict = __engines__
-    translator = None
+    translator:BaseTranslator
 
     def __init__(self, custom_args: Optional[list] = None):
         self.custom_args = custom_args

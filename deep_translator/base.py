@@ -12,16 +12,39 @@ from deep_translator.exceptions import (
     LanguageNotSupportedException,
 )
 
+class Language(str):
+    """A helper class to represent a language with both its name and code,
+    allowing for more user-friendly display of language names while still keeping track of the underlying language code.
+    Backwards compatible with str, so it can be used wherever a string is expected.
+    """
+    code: str
+    is_source: bool = True
+    is_target: bool = True
+    def __new__(cls, code:str, name:str, is_source: Optional[bool] = None, is_target: Optional[bool] = None):
+        """Create a new instance of Language with the given code and name.
+        
+        @param code: the language code (abbreviation)
+        @param name: the full name of the language
+        @param is_source: whether the language is supported as a source language
+        @param is_target: whether the language is supported as a target language
+        """
+        if name.lower() == "auto" or code.lower() == "auto":
+            is_source, is_target = True, False
+        instance = super().__new__(cls, name)
+        instance.code = code
+        instance.is_source = is_source if is_source is not None else cls.is_source
+        instance.is_target = is_target if is_target is not None else cls.is_target
+        return instance
 
 class BaseTranslator(ABC):
     """
     Abstract class that serve as a base translator for other different translators
     """
-
+    _languages_cache: dict = {}  # class-level cache for supported languages of each translator subclass
     def __init__(
         self,
         base_url: Optional[str] = None,
-        languages: dict = GOOGLE_LANGUAGES_TO_CODES,
+        languages: Optional[dict] = None,
         source: str = "auto",
         target: str = "en",
         payload_key: Optional[str] = None,
@@ -34,7 +57,7 @@ class BaseTranslator(ABC):
         @param target: target language to translate to
         """
         self._base_url = base_url
-        self._languages = languages
+        self._languages = languages or self._fetch_supported_languages()
         self._supported_languages = list(self._languages.keys())
         if not source:
             raise InvalidSourceOrTargetLanguage(source)
@@ -63,7 +86,16 @@ class BaseTranslator(ABC):
     @target.setter
     def target(self, lang):
         self._target = lang
+        
+    @property
+    def base_url(self)-> str:
+        assert self._base_url is not None, "Base URL is not set."
+        return self._base_url
 
+    @base_url.setter
+    def base_url(self, url: str):
+        self._base_url = url
+        
     def _type(self):
         return self.__class__.__name__
 
@@ -84,7 +116,7 @@ class BaseTranslator(ABC):
                 raise LanguageNotSupportedException(
                     language,
                     message=f"No support for the provided language.\n"
-                    f"Please select on of the supported languages:\n"
+                    f"Please select one of the supported languages:\n"
                     f"{self._languages}",
                 )
 
@@ -100,7 +132,7 @@ class BaseTranslator(ABC):
         mapping languages to their abbreviations
         @return: list or dict
         """
-        return self._supported_languages if not as_dict else self._languages
+        return self._languages if as_dict else list(self._languages.keys())
 
     def is_language_supported(self, language: str, **kwargs) -> bool:
         """
@@ -116,7 +148,16 @@ class BaseTranslator(ABC):
             return True
         else:
             return False
-
+    
+    def _fetch_supported_languages(self, **kwargs) -> dict:
+        """ Fetch supported languages from the translator's API, 
+        Use Google's supported languages as a fallback if the translator does not provide an API for fetching supported languages.
+        @return: dict mapping language names to their codes
+        """
+        if not self._languages_cache:
+            self.__class__._languages_cache = GOOGLE_LANGUAGES_TO_CODES.copy()
+        return self._languages_cache
+    
     @abstractmethod
     def translate(self, text: str, **kwargs) -> str:
         """

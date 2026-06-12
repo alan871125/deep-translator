@@ -64,7 +64,7 @@ class BaiduTranslator(BaseTranslator):
             **kwargs
         )
 
-    def translate(self, text: str, **kwargs) -> str:
+    def translate(self, text: str, **kwargs) -> Optional[str]:
         """
         @param text: text to translate
         @return: translated text

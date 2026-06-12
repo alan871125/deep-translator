@@ -63,7 +63,7 @@ class YandexTranslator(BaseTranslator):
     @property
     def dirs(self, proxies: Optional[dict] = None):
         try:
-            url = self._base_url.format(
+            url = self.base_url.format(
                 version=self.api_version, endpoint="getLangs"
             )
             print("url: ", url)
@@ -87,7 +87,7 @@ class YandexTranslator(BaseTranslator):
             "key": self.api_key,
         }
         try:
-            url = self._base_url.format(
+            url = self.base_url.format(
                 version=self.api_version, endpoint="detect"
             )
             response = requests.post(url, data=params, proxies=proxies)
@@ -110,7 +110,7 @@ class YandexTranslator(BaseTranslator):
 
     def translate(
         self, text: str, proxies: Optional[dict] = None, **kwargs
-    ) -> str:
+    ) -> Optional[str]:
         if is_input_valid(text):
             params = {
                 "text": text,
@@ -121,7 +121,7 @@ class YandexTranslator(BaseTranslator):
                 "key": self.api_key,
             }
             try:
-                url = self._base_url.format(
+                url = self.base_url.format(
                     version=self.api_version, endpoint="translate"
                 )
                 response = requests.post(url, data=params, proxies=proxies)
