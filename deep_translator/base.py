@@ -4,7 +4,7 @@ __copyright__ = "Copyright (C) 2020 Nidhal Baccouri"
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Generator, List, Optional, Union
 
 from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
 from deep_translator.exceptions import (
@@ -35,12 +35,81 @@ class Language(str):
         instance.is_source = is_source if is_source is not None else cls.is_source
         instance.is_target = is_target if is_target is not None else cls.is_target
         return instance
+    
+class SupportedLanguages:
+    lang2code: dict[str, str]
+    code2lang: dict[str, Language]
+    def __init__(self):
+        self.lang2code = {}
+        self.code2lang = {}
+    @classmethod
+    def from_lang2code(cls, lang2code: dict[str|Language, str]):
+        """Create a LanguageSupportMenu instance from a mapping of language names to codes.
+        
+        @param lang2code: a dictionary mapping language names to their corresponding codes
+        """
+        instance = cls()
+        for name, code in lang2code.items():
+            if isinstance(name, Language):
+                lang = name
+            else:
+                lang = Language(code, name)
+            instance.lang2code[name] = code
+            instance.code2lang[code] = lang
+        return instance
+    
+    @classmethod
+    def from_code2lang(cls, code2lang: dict[str, str|Language]):
+        """Create a LanguageSupportMenu instance from a mapping of language codes to names.
+        
+        @param code2lang: a dictionary mapping language codes to their corresponding names
+        """
+        instance = cls()
+        for code, name in code2lang.items():
+            if isinstance(name, Language):
+                lang = name
+            else:
+                lang = Language(code, name)
+            instance.lang2code[name] = code
+            instance.code2lang[code] = lang
+        return instance
+    
+    def map_language_to_code(self, *languages: str|Language)-> Generator[str]:
+        """Map a language name to its corresponding code.
+        
+        @param language: the name of the language to map
+        @return: the corresponding language code
+        """
+        for lang in languages:
+            if lang in self.lang2code:   # O(1) 
+                yield self.lang2code[lang]
+            elif lang in self.code2lang: # O(1) 
+                yield lang
+            else:
+                raise LanguageNotSupportedException(
+                    lang,
+                    message=f"No support for the provided language.\n"
+                    f"Please select one of the supported languages:\n"
+                    f"{self.lang2code}",
+                )
+    @property
+    def target_supported_languages(self) -> set[Language]:
+        """Return a list of supported target languages."""
+        return {lang for lang in self.code2lang.values() if lang.is_target}
+    @property
+    def source_supported_languages(self) -> set[Language]:
+        """Return a list of supported source languages."""
+        return {lang for lang in self.code2lang.values() if lang.is_source}
+    @property
+    def supported_languages(self) -> set[Language]:
+        """Return a list of all supported languages."""
+        return set(self.code2lang.values())
 
 class BaseTranslator(ABC):
     """
     Abstract class that serve as a base translator for other different translators
     """
-    _languages_cache: dict = {}  # class-level cache for supported languages of each translator subclass
+    languages_cache: SupportedLanguages  # class-level cache for supported languages of each translator subclass
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -57,8 +126,10 @@ class BaseTranslator(ABC):
         @param target: target language to translate to
         """
         self._base_url = base_url
-        self._languages = languages or self._fetch_supported_languages()
-        self._supported_languages = list(self._languages.keys())
+        if languages is not None:
+            self._supported_languages = SupportedLanguages.from_lang2code(languages)
+        else:
+            self._supported_languages = self._fetch_supported_languages()
         if not source:
             raise InvalidSourceOrTargetLanguage(source)
         if not target:
@@ -98,7 +169,24 @@ class BaseTranslator(ABC):
         
     def _type(self):
         return self.__class__.__name__
-
+    @property
+    def _lang2code(self):
+        return self._supported_languages.lang2code
+    @property
+    def _code2lang(self):
+        return self._supported_languages.code2lang
+    @property
+    def target_supported_languages(self) -> set[Language]:
+        """Return a list of supported target languages."""
+        return self._supported_languages.target_supported_languages
+    @property
+    def source_supported_languages(self) -> set[Language]:
+        """Return a list of supported source languages."""
+        return self._supported_languages.source_supported_languages
+    @property
+    def supported_languages(self) -> set[Language]:
+        """Return a list of all supported languages."""
+        return self._supported_languages.supported_languages
     def _map_language_to_code(self, *languages):
         """
         map language to its corresponding code (abbreviation) if the language was passed
@@ -107,18 +195,7 @@ class BaseTranslator(ABC):
         @return: mapped value of the language or raise an exception if the language is
         not supported
         """
-        for language in languages:
-            if language in self._languages.values() or language == "auto":
-                yield language
-            elif language in self._languages.keys():
-                yield self._languages[language]
-            else:
-                raise LanguageNotSupportedException(
-                    language,
-                    message=f"No support for the provided language.\n"
-                    f"Please select one of the supported languages:\n"
-                    f"{self._languages}",
-                )
+        return self._supported_languages.map_language_to_code(*languages)
 
     def _same_source_target(self) -> bool:
         return self._source == self._target
@@ -132,7 +209,7 @@ class BaseTranslator(ABC):
         mapping languages to their abbreviations
         @return: list or dict
         """
-        return self._languages if as_dict else list(self._languages.keys())
+        return self._lang2code if as_dict else list(self._lang2code.keys())
 
     def is_language_supported(self, language: str, **kwargs) -> bool:
         """
@@ -142,22 +219,23 @@ class BaseTranslator(ABC):
         """
         if (
             language == "auto"
-            or language in self._languages.keys()
-            or language in self._languages.values()
+            or language in self._lang2code.keys()
+            or language in self._lang2code.values()
         ):
             return True
         else:
             return False
-    
-    def _fetch_supported_languages(self, **kwargs) -> dict:
+    @classmethod
+    def _fetch_supported_languages(cls, *args, **kwargs) -> SupportedLanguages:
         """ Fetch supported languages from the translator's API, 
         Use Google's supported languages as a fallback if the translator does not provide an API for fetching supported languages.
         @return: dict mapping language names to their codes
         """
-        if not self._languages_cache:
-            self.__class__._languages_cache = GOOGLE_LANGUAGES_TO_CODES.copy()
-        return self._languages_cache
-    
+        if hasattr(cls, "languages_cache") and cls.languages_cache is not None:
+            return cls.languages_cache
+        cls._languages_cache = SupportedLanguages.from_lang2code(GOOGLE_LANGUAGES_TO_CODES)
+        return cls._languages_cache
+
     @abstractmethod
     def translate(self, text: str, **kwargs) -> str:
         """

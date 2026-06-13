@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional
 from bs4 import BeautifulSoup
 
-from deep_translator.base import BaseTranslator, Language
+from deep_translator.base import BaseTranslator, Language, SupportedLanguages
 from deep_translator.constants import BASE_URLS, GOOGLE_LANGUAGES_TO_CODES
 from deep_translator.exceptions import (
     RequestError,
@@ -56,15 +56,15 @@ class GoogleTranslator(BaseTranslator):
         self._alt_element_query = {"class": "result-container"}
     
     @classmethod
-    def _fetch_supported_languages(cls, lang: str='en') -> dict[str, Language]:
+    def _fetch_supported_languages(cls, lang: str='en') -> SupportedLanguages:
         """
         Fetch supported languages from the translator's API
         
         @param lang: language to get the names of the supported languages in
         @return: dict mapping language names to their codes
         """
-        if cls._languages_cache:
-            return cls._languages_cache
+        if hasattr(cls, "languages_cache") and cls.languages_cache is not None:
+            return cls.languages_cache
         url = f"https://translate.google.com/?hl={lang}"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         response = requests.get(url, headers=headers)
@@ -78,25 +78,25 @@ class GoogleTranslator(BaseTranslator):
         if (match := re.search(pattern, html, re.DOTALL)) is not None:
             data_str = match.group(1)
             try:
-                data = json.loads(data_str)
-                languages = {d[0]: Language(*d) for d in data[0]}
-                if cls  .save_cache:
+                data = json.loads(data_str) 
+                code2lang = {d[0]: d[1] for d in data[0]} # d[0],d[1]: code, name
+                if cls.save_cache:
                     logger.debug(f"Caching supported languages to {cache_file}")
                     cache_file.parent.mkdir(parents=True, exist_ok=True)
                     with open(cache_file, "w", encoding="utf-8") as f:
-                        json.dump({name: lang.code for name, lang in languages.items()}, f, ensure_ascii=False, indent=4)
+                        json.dump({c: l for c, l in code2lang.items()}, f, ensure_ascii=False, indent=4)
             except Exception as e:
                 raise RequestError(f"Failed to parse supported languages: {e}")
         # try loading from local cache file
         elif cache_file.exists():
             with open(cache_file, "r", encoding="utf-8") as f:
-                languages = {name: Language(code, name) for name, code in json.load(f).items()}
+                code2lang = json.load(f)
         else:
             logger.warning("Failed to fetch supported languages from API nor caching from local. Falling back to default language list.")
-            languages = {name: Language(code, name) for name, code in GOOGLE_LANGUAGES_TO_CODES.items()}
-        cls._languages_cache = languages
-        return languages
-        
+            code2lang = GOOGLE_LANGUAGES_TO_CODES.copy()
+        cls.languages_cache = SupportedLanguages.from_code2lang(code2lang)
+        return cls.languages_cache
+
     def translate(self, text: str, **kwargs) -> Optional[str]:
         """
         function to translate a text
