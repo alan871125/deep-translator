@@ -93,17 +93,17 @@ class SupportedLanguages:
                     f"{self.lang2code}",
                 )
     @property
-    def target_supported_languages(self) -> set[Language]:
+    def target_supported_languages(self) -> list[Language]:
         """Return a list of supported target languages."""
-        return {lang for lang in self.code2lang.values() if lang.is_target}
+        return [lang for lang in self.code2lang.values() if lang.is_target and lang.code != 'auto']
     @property
-    def source_supported_languages(self) -> set[Language]:
+    def source_supported_languages(self) -> list[Language]:
         """Return a list of supported source languages."""
-        return {lang for lang in self.code2lang.values() if lang.is_source}
+        return [lang for lang in self.code2lang.values() if lang.is_source]
     @property
-    def supported_languages(self) -> set[Language]:
+    def supported_languages(self) -> list[Language]:
         """Return a list of all supported languages."""
-        return set(self.code2lang.values())
+        return list(self.code2lang.values())
 
 class BaseTranslator(ABC):
     """
@@ -176,15 +176,15 @@ class BaseTranslator(ABC):
     def _code2lang(self):
         return self._supported_languages.code2lang
     @property
-    def target_supported_languages(self) -> set[Language]:
+    def target_supported_languages(self) -> list[Language]:
         """Return a list of supported target languages."""
         return self._supported_languages.target_supported_languages
     @property
-    def source_supported_languages(self) -> set[Language]:
+    def source_supported_languages(self) -> list[Language]:
         """Return a list of supported source languages."""
         return self._supported_languages.source_supported_languages
     @property
-    def supported_languages(self) -> set[Language]:
+    def supported_languages(self) -> list[Language]:
         """Return a list of all supported languages."""
         return self._supported_languages.supported_languages
     def _map_language_to_code(self, *languages):
