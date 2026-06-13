@@ -82,6 +82,7 @@ class DeeplTranslator(BaseTranslator):
             f"{self._base_url}/languages", headers=headers, params=params
         )
         if request_failed(response.status_code):
+            # If the request failed, try to load from cache if enabled, otherwise fallback to default language list.
             if cache_file.exists():
                 with open(cache_file, "r") as f:
                     code2lang = dict(json.load(f, object_hook=object_hook))
@@ -97,6 +98,7 @@ class DeeplTranslator(BaseTranslator):
         else:
             logger.warning("Failed to fetch supported languages from API nor caching from local. Falling back to default language list.")
             code2lang = {code: Language(code, name) for name, code in DEEPL_LANGUAGE_TO_CODE.items()}
+        code2lang.update({'auto': Language('auto', 'Auto', is_source=True, is_target=False)}) # force add 'auto' to the supported languages list since DeepL auto detects source language if not specified.
         self.__class__.languages_cache = SupportedLanguages.from_code2lang(code2lang)
         return self.__class__.languages_cache
 
