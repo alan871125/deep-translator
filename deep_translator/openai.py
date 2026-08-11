@@ -8,7 +8,7 @@ from openai import OpenAI
 from pathlib import Path
 from typing import List, Optional
 
-from deep_translator.base import BaseTranslator, Language
+from deep_translator.base import BaseTranslator, Language, SupportedLanguages
 from deep_translator.google import GoogleTranslator
 from deep_translator.constants import BASE_URLS, GOOGLE_LANGUAGES_TO_CODES
 from deep_translator.exceptions import (
@@ -62,12 +62,12 @@ class OpenAITranslator(BaseTranslator):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
         
-    def _fetch_supported_languages(self) -> dict[str, Language]:
+    def _fetch_supported_languages(self) -> SupportedLanguages:
         # Use GoogleTranslator's method for supported languages
         return GoogleTranslator._fetch_supported_languages()
     
     def translate(self, text:str, **kwargs)-> Optional[str]:
-        target_lang = self._languages.get(self._target, self._target)
+        target_lang = self._lang2code.get(self._target, self._target)
         system_prompt = SYSTEM_PROMPT.format(engine_name=self.model, target_lang=target_lang)
         main_prompt = TRANSLATION_PROMPT_TEMPLATE.format(text=text)
         model = self.model

@@ -17,7 +17,7 @@ def google_translator():
     return GoogleTranslator(target="en")
 
 def test_fetching_supported_languages():
-    for k,v in GoogleTranslator()._languages.items():
+    for k,v in GoogleTranslator()._lang2code.items():
         assert type(k) == str,type(v) == Language
         
 def test_content(google_translator):
