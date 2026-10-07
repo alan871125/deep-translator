@@ -66,10 +66,18 @@ class OpenAITranslator(BaseTranslator):
         # Use GoogleTranslator's method for supported languages
         return GoogleTranslator._fetch_supported_languages()
     
-    def translate(self, text:str, **kwargs)-> Optional[str]:
+    def translate(self, text:str, system_prompt:str=SYSTEM_PROMPT, main_prompt:str=TRANSLATION_PROMPT_TEMPLATE, **kwargs)-> Optional[str]:
+        """
+        @param text: text to translate
+        @param system_prompt: the system prompt to use
+            Can be formatted with `{engine_name}` and `{target_lang}` placeholders.
+        @param main_prompt: the main prompt to use
+            Can be formatted with `{text}` placeholder.
+        @return: the translated text or None if the translation failed
+        """
         target_lang = self._lang2code.get(self._target, self._target)
-        system_prompt = SYSTEM_PROMPT.format(engine_name=self.model, target_lang=target_lang)
-        main_prompt = TRANSLATION_PROMPT_TEMPLATE.format(text=text)
+        system_prompt = system_prompt.format(engine_name=self.model, target_lang=target_lang)
+        main_prompt = main_prompt.format(text=text)
         model = self.model
         if "model" in kwargs:
             logger.warning("Overriding the model specified in the translator initialization is not recommended as it may lead to unexpected behavior. Proceed with caution.")
