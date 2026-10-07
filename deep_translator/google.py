@@ -11,6 +11,7 @@ import re
 import json
 import logging
 import requests
+import httpx
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -120,24 +121,30 @@ class GoogleTranslator(BaseTranslator):
             return cleaned_text
 
         # Build local params copy to prevent mutating class state across calls
-        params = dict(self._url_params)
-        params["tl"] = self._target
-        params["sl"] = self._source
-        if self.payload_key:
-            params[self.payload_key] = cleaned_text
+        params = {
+            "client": "gtx",
+            "sl": self._source,
+            "tl": self._target,
+            "dt": "t",
+            "q": cleaned_text,
+        }
 
-        # Merge headers to avoid sending default 'python-requests' User-Agent
-        headers = getattr(self, "headers", DEFAULT_HEADERS)
+        url = "https://translate.googleapis.com/translate_a/single"
+        proxy_url = None
+        if isinstance(self.proxies, dict):
+            proxy_url = (
+                self.proxies.get("https")
+                or self.proxies.get("http")
+                or self.proxies.get("https://")
+                or self.proxies.get("http://")
+            )
+        elif isinstance(self.proxies, str):
+            proxy_url = self.proxies
 
         for attempt in range(max_retries + 1):
             try:
-                with requests.get(
-                    self.base_url,
-                    params=params,
-                    headers=headers,
-                    proxies=self.proxies,
-                    timeout=10,  # Always set timeouts to avoid hanging requests
-                ) as response:
+                with httpx.Client(proxy=proxy_url, timeout=10.0) as client:
+                    response = client.get(url, params=params)
 
                     if response.status_code == 429:
                         raise TooManyRequests("Rate limited by host.")
@@ -145,43 +152,17 @@ class GoogleTranslator(BaseTranslator):
                     if request_failed(status_code=response.status_code):
                         raise RequestError(f"HTTP Error: {response.status_code}")
 
-                    soup = BeautifulSoup(response.text, "html.parser")
-
-                    # Target search
-                    element = soup.find(
-                        self._element_tag, self._element_query
-                    ) or soup.find(self._element_tag, self._alt_element_query)
-
-                    if not element:
+                    data = response.json()
+                    if not data or not data[0]:
                         raise TranslationNotFound(cleaned_text)
 
-                    result_text = element.get_text(strip=True)
-
-                    # Check if output strictly matches input (untranslated)
-                    if result_text == cleaned_text:
-                        to_translate_alpha = "".join(
-                            ch for ch in cleaned_text if ch.isalnum()
-                        )
-                        translated_alpha = "".join(
-                            ch for ch in result_text if ch.isalnum()
-                        )
-
-                        if (
-                            to_translate_alpha
-                            and to_translate_alpha == translated_alpha
-                        ):
-                            # Retry strategy without recursion or state pollution
-                            if "hl" in params:
-                                del params["hl"]
-                                time.sleep(1)  # Brief backoff before retry
-                                continue
-
+                    result_text = "".join(item[0] for item in data[0] if item[0])
                     return result_text
 
-            except (requests.RequestException, RequestError):
+            except (httpx.HTTPError, RequestError):
                 if attempt == max_retries:
                     raise
-                time.sleep(2**attempt)  # Exponential backoff
+                time.sleep(2**attempt)
 
         return None
 
