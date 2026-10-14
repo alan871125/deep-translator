@@ -18,7 +18,7 @@ from typing import List, Optional
 from bs4 import BeautifulSoup
 
 from deep_translator.base import BaseTranslator, Language, SupportedLanguages
-from deep_translator.constants import BASE_URLS, GOOGLE_LANGUAGES_TO_CODES
+from deep_translator.constants import BASE_URLS, GOOGLE_LANGUAGES_TO_CODES, GOOGLE_CODES_TO_LANGUAGES
 from deep_translator.exceptions import (
     RequestError,
     TooManyRequests,
@@ -104,7 +104,7 @@ class GoogleTranslator(BaseTranslator):
                 code2lang = json.load(f)
         else:
             logger.warning("Failed to fetch supported languages from API nor caching from local. Falling back to default language list.")
-            code2lang = GOOGLE_LANGUAGES_TO_CODES.copy()
+            code2lang = GOOGLE_CODES_TO_LANGUAGES.copy()
         cls.languages_cache = SupportedLanguages.from_code2lang(code2lang)
         return cls.languages_cache
 
